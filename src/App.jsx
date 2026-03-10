@@ -18,8 +18,13 @@ export default function App() {
     ];
   });
 
+  // Salvare securizată: dacă se umple memoria, te anunță în consolă în loc să blocheze aplicația
   useEffect(() => {
-    localStorage.setItem('ironTrackerData', JSON.stringify(data));
+    try {
+      localStorage.setItem('ironTrackerData', JSON.stringify(data));
+    } catch (e) {
+      console.error("LocalStorage este plin! Compresia va ajuta la noi intrări, dar cele vechi ocupă spațiu.");
+    }
   }, [data]);
 
   const [activeTab, setActiveTab] = useState('history');
@@ -38,6 +43,31 @@ export default function App() {
 
   const [formData, setFormData] = useState(defaultFormState);
 
+  // LOGICA NOUĂ: Compresie automată pentru a evita ecranul alb
+  const compressImage = (base64Str) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7)); // Salvează ca JPG la 70% calitate (economisire masivă de spațiu)
+      };
+    });
+  };
+
   const calculateBodyFat = (waist, neck, height = 178) => {
     if (!waist || !neck) return null;
     const bf = 495 / (1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(height)) - 450;
@@ -48,12 +78,14 @@ export default function App() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // MODIFICAT: Acum apelează funcția de compresie înainte de a pune poza în formular
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData({ ...formData, image: reader.result });
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result);
+        setFormData({ ...formData, image: compressed });
       };
       reader.readAsDataURL(file);
     }
